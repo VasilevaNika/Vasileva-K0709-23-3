@@ -32,50 +32,50 @@ erDiagram
   users {
     bigint id PK
     bigint telegram_id UK
-    timestamptz created_at
+    timestamp created_at
     boolean is_active
   }
 
   profiles {
     bigint id PK
     bigint user_id FK
-    varchar display_name
+    string display_name
     text bio
     date birth_date
-    varchar gender
-    varchar city
+    string gender
+    string city
     text interests
-    smallint profile_completeness
+    int profile_completeness
   }
 
   profile_photos {
     bigint id PK
     bigint profile_id FK
-    varchar storage_key
+    string storage_key
     int sort_order
   }
 
   user_preferences {
-    bigint user_id PK_FK
-    varchar preferred_gender
+    bigint user_id PK
+    string preferred_gender
     int age_min
     int age_max
-    varchar preferred_city
+    string preferred_city
   }
 
   swipes {
     bigint id PK
     bigint from_user_id FK
     bigint to_user_id FK
-    varchar action
-    timestamptz created_at
+    string action
+    timestamp created_at
   }
 
   matches {
     bigint id PK
     bigint user_a_id FK
     bigint user_b_id FK
-    timestamptz created_at
+    timestamp created_at
   }
 
   messages {
@@ -83,15 +83,15 @@ erDiagram
     bigint match_id FK
     bigint sender_id FK
     text body
-    timestamptz sent_at
+    timestamp sent_at
   }
 
   profile_ratings {
-    bigint profile_id PK_FK
+    bigint profile_id PK
     float primary_score
     float behavior_score
     float combined_score
-    timestamptz updated_at
+    timestamp updated_at
   }
 ```
 
