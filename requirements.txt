@@ -1,0 +1,9 @@
+# Bot dependencies
+aiogram>=3.10,<4.0
+# Database
+SQLAlchemy==2.0.25
+asyncpg==0.30.0
+alembic==1.13.1
+# Config
+pydantic==2.5.3
+pydantic-settings==2.1.0
