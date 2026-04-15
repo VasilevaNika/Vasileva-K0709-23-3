@@ -10,26 +10,27 @@ BEGIN TRANSACTION;
 INSERT INTO Orders (CustomerID, OrderDate, TotalAmount)
 VALUES (1, datetime('now'), 0);
 
--- Получаем ID только что созданного заказа
--- В SQLite используем last_insert_rowid()
+-- Сохраняем ID только что созданного заказа
+-- В SQLite используем переменную через SELECT ... INTO не поддерживается,
+-- поэтому используем подзапрос с MAX(OrderID) для текущего клиента
 
 -- 2. Добавляем позиции заказа
 -- Позиция 1: ProductID=1, Quantity=2, Price=29.99 -> Subtotal=59.98
 INSERT INTO OrderItems (OrderID, ProductID, Quantity, Subtotal)
-VALUES (last_insert_rowid(), 1, 2, 59.98);
+VALUES ((SELECT MAX(OrderID) FROM Orders WHERE CustomerID = 1), 1, 2, 59.98);
 
 -- Позиция 2: ProductID=2, Quantity=1, Price=49.99 -> Subtotal=49.99
 INSERT INTO OrderItems (OrderID, ProductID, Quantity, Subtotal)
-VALUES (last_insert_rowid(), 2, 1, 49.99);
+VALUES ((SELECT MAX(OrderID) FROM Orders WHERE CustomerID = 1), 2, 1, 49.99);
 
 -- 3. Обновляем общую сумму заказа на основе сумм промежуточных итогов
 UPDATE Orders
 SET TotalAmount = (
     SELECT SUM(Subtotal)
     FROM OrderItems
-    WHERE OrderID = last_insert_rowid()
+    WHERE OrderID = (SELECT MAX(OrderID) FROM Orders WHERE CustomerID = 1)
 )
-WHERE OrderID = last_insert_rowid();
+WHERE OrderID = (SELECT MAX(OrderID) FROM Orders WHERE CustomerID = 1);
 
 COMMIT;
 
