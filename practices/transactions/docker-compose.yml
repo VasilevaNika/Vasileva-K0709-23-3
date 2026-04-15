@@ -1,0 +1,23 @@
+services:
+  app:
+    build: .
+    container_name: online-store-transactions
+    volumes:
+      - db-data:/app/data
+    environment:
+      - DB_PATH=/app/data/store.db
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-db
+    environment:
+      POSTGRES_USER: store
+      POSTGRES_PASSWORD: store_password
+      POSTGRES_DB: online_store
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+
+volumes:
+  db-data:
+  postgres-data:
