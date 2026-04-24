@@ -15,13 +15,20 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.config import settings
 from app.database import init_db
-from app.handlers import register_main_router, register_registration_router
-from app.middleware import RepositoryMiddleware
+from app.handlers import (
+    register_main_router,
+    register_registration_router,
+    register_feed_router,
+    register_matches_router,
+    register_profile_router,
+)
+from app.middleware import RepositoryMiddleware, CacheMiddleware
+from app.services.cache import FeedCache, get_redis, close_redis
 
 
 async def main():
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
@@ -29,21 +36,38 @@ async def main():
     await init_db()
     logging.info("Database initialized.")
 
-    # Создание бота и диспетчера
+    # Redis и кэш
+    redis = await get_redis()
+    feed_cache = FeedCache(redis)
+    logging.info("Redis connected.")
+
+    # Бот и диспетчер
     bot = Bot(token=settings.bot_token)
-    storage = MemoryStorage()  # FSM-хранилище в памяти (можно заменить на Redis)
+    storage = MemoryStorage()
     dp = Dispatcher(storage=storage)
 
-    # Middleware — инъекция репозитория
-    dp.message.middleware(RepositoryMiddleware())
-    dp.callback_query.middleware(RepositoryMiddleware())
+    # Middleware
+    repo_mw = RepositoryMiddleware()
+    cache_mw = CacheMiddleware(feed_cache)
 
-    # Регистрация роутеров
+    dp.message.middleware(repo_mw)
+    dp.callback_query.middleware(repo_mw)
+    dp.message.middleware(cache_mw)
+    dp.callback_query.middleware(cache_mw)
+
+    # Регистрация роутеров (порядок важен: более специфичные — первыми)
     register_main_router(dp)
     register_registration_router(dp)
+    register_feed_router(dp)
+    register_matches_router(dp)
+    register_profile_router(dp)
 
     logging.info("Bot is starting...")
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await close_redis()
+        await bot.session.close()
 
 
 if __name__ == "__main__":

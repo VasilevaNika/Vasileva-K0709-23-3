@@ -28,8 +28,6 @@ class User(Base):
     received_swipes: Mapped[list["Swipe"]] = relationship(
         back_populates="to_user", foreign_keys="Swipe.to_user_id"
     )
-    ratings: Mapped["ProfileRating | None"] = relationship(back_populates="user", uselist=False)
-
     def __repr__(self):
         return f"<User telegram_id={self.telegram_id}>"
 
@@ -57,6 +55,7 @@ class Profile(Base):
     photos: Mapped[list["ProfilePhoto"]] = relationship(
         back_populates="profile", cascade="all, delete-orphan"
     )
+    rating: Mapped["ProfileRating | None"] = relationship(back_populates="profile", uselist=False)
 
     def __repr__(self):
         return f"<Profile {self.display_name} (user_id={self.user_id})>"
@@ -163,7 +162,7 @@ class ProfileRating(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    user: Mapped["User"] = relationship(back_populates="ratings", foreign_keys="ProfileRating.profile_id")
+    profile: Mapped["Profile"] = relationship(back_populates="rating")
 
     def __repr__(self):
         return f"<Rating profile_id={self.profile_id} combined={self.combined_score}>"

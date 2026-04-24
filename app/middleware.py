@@ -1,21 +1,20 @@
 """
-Middleware для инъекции UserRepository в хендлеры.
+Middleware для инъекции UserRepository и FeedCache в хендлеры.
 """
 
 from typing import Callable, Dict, Any, Awaitable
 
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_factory
 from app.repository import UserRepository
+from app.services.cache import FeedCache
 
 
 class RepositoryMiddleware(BaseMiddleware):
     """
-    Middleware, который создаёт AsyncSession и UserRepository
-    и передаёт их в хендлер как параметр `repo: UserRepository`.
+    Создаёт AsyncSession + UserRepository и передаёт их в хендлер как `repo`.
     """
 
     def __init__(self):
@@ -36,3 +35,21 @@ class RepositoryMiddleware(BaseMiddleware):
             except Exception:
                 await session.rollback()
                 raise
+
+
+class CacheMiddleware(BaseMiddleware):
+    """
+    Передаёт общий экземпляр FeedCache в хендлеры как `feed_cache`.
+    """
+
+    def __init__(self, cache: FeedCache):
+        self._cache = cache
+
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: Dict[str, Any],
+    ) -> Any:
+        data["feed_cache"] = self._cache
+        return await handler(event, data)

@@ -91,20 +91,25 @@ def register_registration_router(router: Router):
 
     @router.message(Command("register"))
     async def cmd_register(message: Message, state: FSMContext, repo: UserRepository):
-        """Запуск процесса регистрации."""
-        user = await repo.get_user_by_telegram_id(message.from_user.id)
-        if user and user.is_registered:
-            await message.answer(
-                "✅ Вы уже зарегистрированы!\n"
-                "Используйте /menu для перехода в главное меню."
+        """Запуск регистрации или редактирования профиля."""
+        user, _ = await repo.get_or_create_user(message.from_user.id)
+
+        # Сохраняем user_id в FSM — он нужен на финальном шаге
+        await state.update_data(user_id=user.id)
+
+        if user.is_registered:
+            intro = (
+                "✏️ Редактирование профиля.\n\n"
+                "Пройдите шаги заново — введите новые данные.\n\n"
             )
-            await state.clear()
-            return
+        else:
+            intro = (
+                "🎉 Добро пожаловать в Dating Bot!\n\n"
+                "Давайте создадим ваш профиль. Это займёт пару минут.\n\n"
+            )
 
         await message.answer(
-            "🎉 Добро пожаловать в Dating Bot!\n\n"
-            "Давайте создадим ваш профиль. "
-            "Это займёт пару минут.\n\n"
+            intro +
             "Шаг 1/11: Как вас зовут?\n"
             "_(Введите ваше имя)_",
             parse_mode="Markdown",
@@ -204,7 +209,8 @@ def register_registration_router(router: Router):
             await state.update_data(interests=interests)
 
             await callback.message.edit_text(
-                "Шаг 7/11: Хотите загрузить фотографию?"
+                "Шаг 7/11: Хотите загрузить фотографию?",
+                reply_markup=yes_no_keyboard().as_markup(),
             )
             await state.set_state(RegistrationStates.waiting_for_photo)
             return

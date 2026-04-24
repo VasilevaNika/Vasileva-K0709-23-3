@@ -15,7 +15,7 @@ from app.handlers.registration import RegistrationStates
 def main_menu_keyboard() -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     kb.button(text="🔍 Анкета", callback_data="menu:anketa")
-    kb.button(text("📝 Мой профиль"), callback_data="menu:my_profile")
+    kb.button(text="📝 Мой профиль", callback_data="menu:my_profile")
     kb.button(text="💌 Мэтчи", callback_data="menu:matches")
     kb.button(text="⚙ Настройки", callback_data="menu:settings")
     kb.adjust(2)
@@ -83,19 +83,54 @@ def register_main_router(router: Router):
             reply_markup=main_menu_keyboard().as_markup(),
         )
 
-    @router.callback_query(F.data.startswith("menu:"))
-    async def menu_callback(callback: CallbackQuery, state: FSMContext, repo: UserRepository):
-        """Обработка кнопок главного меню (заглушки для будущих этапов)."""
-        action = callback.data.split(":", 1)[1]
+    @router.callback_query(F.data == "menu:settings")
+    async def menu_settings(callback: CallbackQuery, repo: UserRepository):
+        """Настройки — показываем текущие предпочтения."""
+        user = await repo.get_user_by_telegram_id(callback.from_user.id)
+        if not user or not user.is_registered:
+            await callback.answer("Сначала нужно зарегистрироваться!", show_alert=True)
+            return
 
-        messages = {
-            "anketa": "🔍 Раздел «Анкета» — в разработке (Этап 3) 🚧",
-            "my_profile": "📝 Раздел «Мой профиль» — в разработке 🚧",
-            "matches": "💌 Раздел «Мэтчи» — в разработке (Этап 3) 🚧",
-            "settings": "⚙ Раздел «Настройки» — в разработке 🚧",
-        }
+        from sqlalchemy import select
+        from app.models import UserPreferences
+        result = await repo.session.execute(
+            select(UserPreferences).where(UserPreferences.user_id == user.id)
+        )
+        prefs = result.scalar_one_or_none()
 
+        if prefs:
+            gender_map = {"male": "Мужчин", "female": "Женщин", "any": "Всех"}
+            pref_gender = gender_map.get(prefs.preferred_gender or "any", "Всех")
+            age_range = f"{prefs.age_min or 14}–{prefs.age_max or 99}"
+            pref_city = prefs.preferred_city or "Любой"
+            text = (
+                f"⚙ <b>Настройки поиска</b>\n\n"
+                f"Ищу: {pref_gender}\n"
+                f"Возраст: {age_range}\n"
+                f"Город: {pref_city}\n\n"
+                "Для изменения пройдите регистрацию повторно: /register"
+            )
+        else:
+            text = "⚙ Настройки не найдены. Пройдите /register."
+
+        kb = InlineKeyboardBuilder()
+        kb.button(text="🔙 В меню", callback_data="back:menu")
+        await callback.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+        await callback.answer()
+
+    @router.callback_query(F.data == "back:menu")
+    async def back_to_menu(callback: CallbackQuery, state: FSMContext, repo: UserRepository):
+        """Вернуться в главное меню."""
+        await state.clear()
+        user = await repo.get_user_by_telegram_id(callback.from_user.id)
+        name = "друг"
+        completeness = 0
+        if user and user.profile:
+            name = user.profile.display_name
+            completeness = user.profile.profile_completeness
         await callback.message.answer(
-            messages.get(action, "Раздел в разработке")
+            f"📱 <b>Главное меню</b>\n\nПрофиль: {name} (заполнено {completeness}%)",
+            reply_markup=main_menu_keyboard().as_markup(),
+            parse_mode="HTML",
         )
         await callback.answer()
