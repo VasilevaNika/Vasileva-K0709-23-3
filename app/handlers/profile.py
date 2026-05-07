@@ -4,6 +4,7 @@
 
 import logging
 from datetime import date
+from typing import Optional
 
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
@@ -12,6 +13,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.repository import UserRepository
 from app.services.ranking import refresh_profile_rating
+from app.services.storage import MinIOStorage
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,11 @@ def register_profile_router(router: Router):
     """Регистрирует хендлеры раздела «Мой профиль»."""
 
     @router.callback_query(F.data == "menu:my_profile")
-    async def open_my_profile(callback: CallbackQuery, repo: UserRepository):
+    async def open_my_profile(
+        callback: CallbackQuery,
+        repo: UserRepository,
+        storage: Optional[MinIOStorage] = None,
+    ):
         """Показать анкету пользователя."""
         user = await repo.get_user_by_telegram_id(callback.from_user.id)
         if not user or not user.is_registered:
@@ -85,8 +91,14 @@ def register_profile_router(router: Router):
         kb.adjust(1)
 
         if photos:
+            # Используем MinIO URL если фото загружено в хранилище,
+            # иначе — Telegram file_id как резервный вариант
+            photo_source: str = photos[0].file_id
+            if storage is not None and photos[0].storage_key:
+                photo_source = storage.get_public_url(photos[0].storage_key)
+
             await callback.message.answer_photo(
-                photo=photos[0].file_id,
+                photo=photo_source,
                 caption=text,
                 reply_markup=kb.as_markup(),
                 parse_mode="HTML",

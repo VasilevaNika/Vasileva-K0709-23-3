@@ -11,6 +11,7 @@
 
 import logging
 from datetime import date
+from typing import Optional
 
 from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, InlineKeyboardButton
@@ -19,6 +20,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.repository import UserRepository
 from app.services.cache import FeedCache, BATCH_SIZE
 from app.services.ranking import build_ranked_feed
+from app.services.storage import MinIOStorage
+from app.services.swipe_limit import SwipeLimiter, DAILY_SWIPE_LIMIT
+from app.tasks import update_profile_rating
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +70,14 @@ async def show_profile_card(
     callback: CallbackQuery,
     profile_id: int,
     repo: UserRepository,
+    storage: Optional[MinIOStorage] = None,
+    remaining_swipes: Optional[int] = None,
 ) -> None:
-    """Отрисовать карточку профиля с кнопками."""
+    """Отрисовать карточку профиля с кнопками.
+
+    Фото берётся из MinIO (через публичный URL) если у фото есть storage_key,
+    иначе используется Telegram file_id как запасной вариант.
+    """
     profile = await repo.get_profile_by_id(profile_id)
     if not profile:
         await callback.message.answer("Анкета не найдена, пропускаем...")
@@ -89,14 +99,22 @@ async def show_profile_card(
         f"🎯 Интересы: {interests}"
     )
 
+    if remaining_swipes is not None:
+        caption += f"\n\n🔄 Осталось свайпов сегодня: {remaining_swipes}/{DAILY_SWIPE_LIMIT}"
+
     kb = InlineKeyboardBuilder()
     kb.button(text="❤️ Лайк", callback_data=f"swipe:like:{profile_id}")
     kb.button(text="👎 Пас", callback_data=f"swipe:pass:{profile_id}")
     kb.adjust(2)
 
     if photos:
+        # Предпочитаем MinIO URL (постоянное хранилище) перед Telegram file_id
+        photo_source: str = photos[0].file_id
+        if storage is not None and photos[0].storage_key:
+            photo_source = storage.get_public_url(photos[0].storage_key)
+
         await callback.message.answer_photo(
-            photo=photos[0].file_id,
+            photo=photo_source,
             caption=caption,
             reply_markup=kb.as_markup(),
             parse_mode="HTML",
@@ -113,11 +131,27 @@ def register_feed_router(router: Router):
     """Регистрирует хендлеры ленты анкет."""
 
     @router.callback_query(F.data == "menu:anketa")
-    async def open_feed(callback: CallbackQuery, repo: UserRepository, feed_cache: FeedCache):
+    async def open_feed(
+        callback: CallbackQuery,
+        repo: UserRepository,
+        feed_cache: FeedCache,
+        swipe_limiter: SwipeLimiter,
+        storage: Optional[MinIOStorage] = None,
+    ):
         """Открыть ленту — показать первую анкету."""
         user = await repo.get_user_by_telegram_id(callback.from_user.id)
         if not user or not user.is_registered:
             await callback.answer("Сначала нужно зарегистрироваться!", show_alert=True)
+            return
+
+        if await swipe_limiter.is_limit_reached(user.id):
+            await callback.message.answer(
+                f"⏳ <b>Лимит свайпов исчерпан</b>\n\n"
+                f"Вы использовали все {DAILY_SWIPE_LIMIT} свайпов на сегодня.\n"
+                "Возвращайтесь завтра — лимит сбрасывается в полночь! 🌙",
+                parse_mode="HTML",
+            )
+            await callback.answer()
             return
 
         profile_id = await _get_next_profile_id(user.id, repo, feed_cache)
@@ -128,7 +162,8 @@ def register_feed_router(router: Router):
             await callback.answer()
             return
 
-        await show_profile_card(callback, profile_id, repo)
+        remaining = await swipe_limiter.remaining(user.id)
+        await show_profile_card(callback, profile_id, repo, storage, remaining_swipes=remaining)
         await callback.answer()
 
     @router.callback_query(F.data.startswith("swipe:"))
@@ -136,7 +171,9 @@ def register_feed_router(router: Router):
         callback: CallbackQuery,
         repo: UserRepository,
         feed_cache: FeedCache,
+        swipe_limiter: SwipeLimiter,
         bot: Bot,
+        storage: Optional[MinIOStorage] = None,
     ):
         """Обработать лайк или пас, затем показать следующую анкету."""
         _, action, profile_id_str = callback.data.split(":", 2)
@@ -145,6 +182,14 @@ def register_feed_router(router: Router):
         viewer_user = await repo.get_user_by_telegram_id(callback.from_user.id)
         if not viewer_user:
             await callback.answer("Ошибка сессии.", show_alert=True)
+            return
+
+        # Проверяем лимит до записи свайпа
+        if await swipe_limiter.is_limit_reached(viewer_user.id):
+            await callback.answer(
+                f"⏳ Лимит {DAILY_SWIPE_LIMIT} свайпов в день исчерпан. Возвращайтесь завтра!",
+                show_alert=True,
+            )
             return
 
         target_profile = await repo.get_profile_by_id(profile_id)
@@ -158,6 +203,14 @@ def register_feed_router(router: Router):
             await repo.record_swipe(viewer_user.id, target_profile.user_id, action)
             await repo.session.commit()
 
+            # Увеличиваем счётчик дневных свайпов
+            await swipe_limiter.increment(viewer_user.id)
+
+            try:
+                update_profile_rating.delay(target_profile.id)
+            except Exception as celery_exc:
+                logger.warning("Celery недоступен, задача обновления рейтинга пропущена: %s", celery_exc)
+
             if action == "like":
                 # Проверяем взаимный лайк
                 is_mutual = await repo.check_mutual_like(viewer_user.id, target_profile.user_id)
@@ -168,6 +221,19 @@ def register_feed_router(router: Router):
                         await repo.session.commit()
                         await _notify_match(bot, repo, match, viewer_user.id, target_profile.user_id)
 
+        remaining = await swipe_limiter.remaining(viewer_user.id)
+
+        # Если лимит только что исчерпан — сообщаем и не показываем следующую анкету
+        if remaining == 0:
+            await callback.message.answer(
+                f"⏳ <b>Лимит свайпов исчерпан!</b>\n\n"
+                f"Вы использовали все {DAILY_SWIPE_LIMIT} свайпов на сегодня.\n"
+                "Возвращайтесь завтра — лимит сбрасывается в полночь! 🌙",
+                parse_mode="HTML",
+            )
+            await callback.answer()
+            return
+
         # Показываем следующую анкету
         next_id = await _get_next_profile_id(viewer_user.id, repo, feed_cache)
         if next_id is None:
@@ -176,7 +242,7 @@ def register_feed_router(router: Router):
                 "Возвращайтесь позже — список обновляется."
             )
         else:
-            await show_profile_card(callback, next_id, repo)
+            await show_profile_card(callback, next_id, repo, storage, remaining_swipes=remaining)
 
         await callback.answer()
 

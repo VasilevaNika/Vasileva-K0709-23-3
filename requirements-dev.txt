@@ -1,0 +1,8 @@
+# Тестирование
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+aiosqlite>=0.20.0
+fakeredis>=2.20.0
+
+# Линтер
+ruff>=0.4.0

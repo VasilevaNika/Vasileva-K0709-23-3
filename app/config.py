@@ -19,6 +19,21 @@ class Settings(BaseSettings):
     redis_port: int = 6379
     redis_db: int = 0
 
+    # Celery (Redis DB 1 — брокер, DB 2 — бэкенд результатов)
+    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/2"
+
+    # Прокси для Telegram API (нужен при блокировке Telegram, например в РФ)
+    # Пример: "http://user:pass@host:port" или "socks5://host:port"
+    telegram_proxy: str | None = None
+
+    # MinIO — объектное хранилище фотографий
+    minio_endpoint: str = "localhost:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_bucket: str = "dating-photos"
+    minio_secure: bool = False  # True если HTTPS
+
     @property
     def database_url(self) -> str:
         return (

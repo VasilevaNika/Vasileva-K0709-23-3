@@ -3,6 +3,7 @@ from app.handlers.registration import register_registration_router
 from app.handlers.feed import register_feed_router
 from app.handlers.matches import register_matches_router
 from app.handlers.profile import register_profile_router
+from app.handlers.stats import register_stats_router
 
 __all__ = [
     "register_main_router",
@@ -10,4 +11,5 @@ __all__ = [
     "register_feed_router",
     "register_matches_router",
     "register_profile_router",
+    "register_stats_router",
 ]

@@ -17,6 +17,7 @@ def main_menu_keyboard() -> InlineKeyboardBuilder:
     kb.button(text="🔍 Анкета", callback_data="menu:anketa")
     kb.button(text="📝 Мой профиль", callback_data="menu:my_profile")
     kb.button(text="💌 Мэтчи", callback_data="menu:matches")
+    kb.button(text="📊 Статистика", callback_data="menu:stats")
     kb.button(text="⚙ Настройки", callback_data="menu:settings")
     kb.adjust(2)
     return kb

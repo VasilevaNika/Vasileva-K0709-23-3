@@ -276,6 +276,49 @@ class UserRepository:
         )
         return list(reversed(result.scalars().all()))
 
+    # ─── Статистика ───────────────────────────────────────────────────────────
+
+    async def get_user_stats(self, user_id: int) -> dict:
+        """
+        Агрегированная статистика пользователя.
+        Возвращает dict с ключами:
+          likes_sent, passes_sent, likes_received, matches, match_rate
+        """
+        likes_sent_res = await self.session.execute(
+            select(func.count()).where(
+                and_(Swipe.from_user_id == user_id, Swipe.action == "like")
+            )
+        )
+        passes_sent_res = await self.session.execute(
+            select(func.count()).where(
+                and_(Swipe.from_user_id == user_id, Swipe.action == "pass")
+            )
+        )
+        likes_received_res = await self.session.execute(
+            select(func.count()).where(
+                and_(Swipe.to_user_id == user_id, Swipe.action == "like")
+            )
+        )
+        matches_res = await self.session.execute(
+            select(func.count()).where(
+                or_(Match.user_a_id == user_id, Match.user_b_id == user_id)
+            )
+        )
+
+        likes_sent = likes_sent_res.scalar() or 0
+        passes_sent = passes_sent_res.scalar() or 0
+        likes_received = likes_received_res.scalar() or 0
+        matches = matches_res.scalar() or 0
+        match_rate = round(matches / likes_sent * 100, 1) if likes_sent > 0 else 0.0
+
+        return {
+            "likes_sent": likes_sent,
+            "passes_sent": passes_sent,
+            "likes_received": likes_received,
+            "matches": matches,
+            "match_rate": match_rate,
+        }
+
     @staticmethod
     def _calculate_completeness(
         display_name: str | None,
