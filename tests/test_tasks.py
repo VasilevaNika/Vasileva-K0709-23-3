@@ -12,7 +12,6 @@ asyncio.run() внутри Celery-задач в тестах не вызывае
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from sqlalchemy import select
 
 from app.models import ProfileRating

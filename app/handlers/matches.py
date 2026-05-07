@@ -142,7 +142,6 @@ def register_matches_router(router: Router):
         data = await state.get_data()
         match_id = data.get("match_id")
         partner_telegram_id = data.get("partner_telegram_id")
-        partner_name = data.get("partner_name", "партнёр")
 
         if not match_id or not partner_telegram_id:
             await message.answer("Ошибка чата. Используйте /menu.")

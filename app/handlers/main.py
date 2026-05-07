@@ -4,12 +4,11 @@
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.repository import UserRepository
-from app.handlers.registration import RegistrationStates
 
 
 def main_menu_keyboard() -> InlineKeyboardBuilder:

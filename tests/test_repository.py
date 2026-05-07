@@ -5,8 +5,6 @@
 
 from datetime import date
 
-import pytest
-
 from app.repository import UserRepository
 
 

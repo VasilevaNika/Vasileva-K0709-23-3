@@ -5,7 +5,6 @@
 Redis API. Тесты не требуют запущенного Redis-сервера.
 """
 
-import pytest
 import pytest_asyncio
 
 from fakeredis import aioredis as fakeredis_async

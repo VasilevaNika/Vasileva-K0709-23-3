@@ -14,7 +14,7 @@ from datetime import date
 from typing import Optional
 
 from aiogram import Router, F, Bot
-from aiogram.types import CallbackQuery, InlineKeyboardButton
+from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.repository import UserRepository

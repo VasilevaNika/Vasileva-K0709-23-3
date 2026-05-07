@@ -8,7 +8,6 @@ Redis-кэш для пачек отранжированных анкет.
 - TTL кэша — 10 минут (пользователь мог уйти, список устарел).
 """
 
-import json
 import logging
 from typing import Optional
 

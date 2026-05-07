@@ -18,7 +18,6 @@ os.environ.setdefault("BOT_TOKEN", "test_token_not_real")
 os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6379/1")
 os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/2")
 
-import pytest
 import pytest_asyncio
 from sqlalchemy import BigInteger
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession

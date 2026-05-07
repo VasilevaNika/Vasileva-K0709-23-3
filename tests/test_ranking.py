@@ -10,7 +10,6 @@
 
 from datetime import date
 
-import pytest
 from sqlalchemy import select
 
 from app.models import ProfileRating
@@ -171,7 +170,6 @@ class TestRefreshProfileRating:
 
         rating1 = await refresh_profile_rating(db_session, profile)
         await db_session.commit()
-        first_combined = rating1.combined_score
 
         # Пересчитываем ещё раз
         rating2 = await refresh_profile_rating(db_session, profile)

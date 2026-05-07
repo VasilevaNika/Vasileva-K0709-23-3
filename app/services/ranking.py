@@ -273,8 +273,8 @@ async def build_ranked_feed(
     candidates_result = await session.execute(
         select(Profile).join(User, User.id == Profile.user_id).where(
             and_(
-                User.is_active == True,
-                User.is_registered == True,
+                User.is_active,
+                User.is_registered,
                 Profile.user_id.notin_(swiped_user_ids),
             )
         )
