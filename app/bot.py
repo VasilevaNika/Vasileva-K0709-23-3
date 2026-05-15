@@ -16,6 +16,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.config import settings
 from app.database import init_db
+from app.logging_config import setup_logging
 from app.handlers import (
     register_main_router,
     register_registration_router,
@@ -30,21 +31,24 @@ from app.services.storage import init_storage
 from app.services.swipe_limit import SwipeLimiter
 
 
+logger = logging.getLogger(__name__)
+
+
 async def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
+    setup_logging()
+    logger.info("=" * 60)
+    logger.info("Dating Bot starting up")
+    logger.info("=" * 60)
 
     # Инициализация БД
     await init_db()
-    logging.info("Database initialized.")
+    logger.info("Database initialized and tables ready")
 
     # Redis и кэш
     redis = await get_redis()
     feed_cache = FeedCache(redis)
     swipe_limiter = SwipeLimiter(redis)
-    logging.info("Redis connected.")
+    logger.info("Redis connected | FeedCache and SwipeLimiter ready")
 
     # MinIO — объектное хранилище фотографий (опционально)
     minio_storage = await init_storage()
@@ -78,10 +82,11 @@ async def main():
     register_profile_router(dp)
     register_stats_router(dp)
 
-    logging.info("Bot is starting...")
+    logger.info("All middleware and routers registered | Bot is starting polling")
     try:
         await dp.start_polling(bot)
     finally:
+        logger.info("Bot shutting down | Closing Redis and HTTP session")
         await close_redis()
         await bot.session.close()
 

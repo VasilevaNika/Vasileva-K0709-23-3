@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
@@ -282,7 +283,10 @@ async def build_ranked_feed(
     profiles = candidates_result.scalars().all()
 
     if not profiles:
+        logger.info("Feed build | viewer_id=%d | no candidates found", viewer_user_id)
         return []
+
+    t_start = time.monotonic()
 
     # Считаем рейтинг для каждого
     scored: list[tuple[float, int]] = []
@@ -292,5 +296,11 @@ async def build_ranked_feed(
 
     # Сортируем по убыванию combined score
     scored.sort(key=lambda x: x[0], reverse=True)
+    result = [pid for _, pid in scored[:limit]]
 
-    return [pid for _, pid in scored[:limit]]
+    elapsed = time.monotonic() - t_start
+    logger.info(
+        "Feed ranked | viewer_id=%d | candidates=%d | returned=%d | elapsed=%.3fs",
+        viewer_user_id, len(profiles), len(result), elapsed,
+    )
+    return result

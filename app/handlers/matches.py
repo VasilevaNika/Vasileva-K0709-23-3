@@ -93,6 +93,11 @@ def register_matches_router(router: Router):
         partner_profile = await repo.get_profile_by_user_id(partner_user_id)
         partner_name = partner_profile.display_name if partner_profile else "Пользователь"
 
+        logger.info(
+            "Chat opened | user_id=%d | match_id=%d | partner_user_id=%d",
+            user.id, match_id, partner_user_id,
+        )
+
         # Показываем историю сообщений
         messages = await repo.get_messages(match_id, limit=10)
 
@@ -153,6 +158,10 @@ def register_matches_router(router: Router):
         if sender_user:
             await repo.send_message(match_id, sender_user.id, message.text)
             await repo.session.commit()
+            logger.info(
+                "Chat message saved | match_id=%d | sender_id=%d | length=%d chars",
+                match_id, sender_user.id, len(message.text),
+            )
 
         # Отправляем партнёру
         try:
@@ -166,5 +175,8 @@ def register_matches_router(router: Router):
             )
             await message.answer("✅ Доставлено")
         except Exception as e:
-            logger.warning("Cannot relay message to %s: %s", partner_telegram_id, e)
+            logger.error(
+                "Message relay failed | match_id=%d | partner_tg_id=%d | error=%s",
+                match_id, partner_telegram_id, e,
+            )
             await message.answer("⚠️ Не удалось доставить сообщение.")

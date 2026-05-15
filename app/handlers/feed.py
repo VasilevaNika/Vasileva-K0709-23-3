@@ -145,6 +145,10 @@ def register_feed_router(router: Router):
             return
 
         if await swipe_limiter.is_limit_reached(user.id):
+            logger.info(
+                "Feed blocked — daily limit reached | user_id=%d | limit=%d",
+                user.id, DAILY_SWIPE_LIMIT,
+            )
             await callback.message.answer(
                 f"⏳ <b>Лимит свайпов исчерпан</b>\n\n"
                 f"Вы использовали все {DAILY_SWIPE_LIMIT} свайпов на сегодня.\n"
@@ -156,6 +160,7 @@ def register_feed_router(router: Router):
 
         profile_id = await _get_next_profile_id(user.id, repo, feed_cache)
         if profile_id is None:
+            logger.info("Feed exhausted — no candidates | user_id=%d", user.id)
             await callback.message.answer(
                 "😔 Пока анкет нет. Загляните позже — новые пользователи появляются каждый день!"
             )
@@ -186,6 +191,10 @@ def register_feed_router(router: Router):
 
         # Проверяем лимит до записи свайпа
         if await swipe_limiter.is_limit_reached(viewer_user.id):
+            logger.info(
+                "Swipe blocked — daily limit reached | user_id=%d | limit=%d",
+                viewer_user.id, DAILY_SWIPE_LIMIT,
+            )
             await callback.answer(
                 f"⏳ Лимит {DAILY_SWIPE_LIMIT} свайпов в день исчерпан. Возвращайтесь завтра!",
                 show_alert=True,
@@ -204,12 +213,19 @@ def register_feed_router(router: Router):
             await repo.session.commit()
 
             # Увеличиваем счётчик дневных свайпов
-            await swipe_limiter.increment(viewer_user.id)
+            new_count = await swipe_limiter.increment(viewer_user.id)
+            logger.info(
+                "Swipe | user_id=%d → profile_id=%d | action=%s | daily_count=%d/%d",
+                viewer_user.id, profile_id, action, new_count, DAILY_SWIPE_LIMIT,
+            )
 
             try:
                 update_profile_rating.delay(target_profile.id)
             except Exception as celery_exc:
-                logger.warning("Celery недоступен, задача обновления рейтинга пропущена: %s", celery_exc)
+                logger.warning(
+                    "Celery unavailable — rating update skipped | profile_id=%d | error=%s",
+                    target_profile.id, celery_exc,
+                )
 
             if action == "like":
                 # Проверяем взаимный лайк
@@ -219,6 +235,10 @@ def register_feed_router(router: Router):
                     if not existing_match:
                         match = await repo.create_match(viewer_user.id, target_profile.user_id)
                         await repo.session.commit()
+                        logger.info(
+                            "Match created | match_id=%d | user_a_id=%d | user_b_id=%d",
+                            match.id, viewer_user.id, target_profile.user_id,
+                        )
                         await _notify_match(bot, repo, match, viewer_user.id, target_profile.user_id)
 
         remaining = await swipe_limiter.remaining(viewer_user.id)

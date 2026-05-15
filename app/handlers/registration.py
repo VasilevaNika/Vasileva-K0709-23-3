@@ -392,6 +392,10 @@ def register_registration_router(router: Router):
                 storage_key=data.get("photo_storage_key"),
             )
 
+        logger.info(
+            "Registration complete | user_id=%d | display_name=%s | completeness=%d%%",
+            data["user_id"], data["display_name"], profile.profile_completeness,
+        )
         await message.answer(
             "🎉 Регистрация завершена!\n\n"
             "Ваш профиль создан.\n"
